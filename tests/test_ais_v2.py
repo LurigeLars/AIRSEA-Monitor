@@ -11,6 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "App"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from validate_migration import verify_live_db_backup  # noqa: E402
+from snapshot_sqlite import snapshot  # noqa: E402
+from upgrade_sqlite import upgrade  # noqa: E402
 from pilot_core import EAST_LIMIT, WEST_LIMIT, open_db, process_ais, prune_temp, summary  # noqa: E402
 
 UTC = timezone.utc
@@ -198,6 +200,18 @@ class LegacyV1MigrationTests(unittest.TestCase):
             """)
             old.commit()
             old.close()
+            # Verify full release path using source=read-only, backup=v1, upgrade=copy.
+            backup = Path(directory) / "release-test-backup.sqlite"
+            ver, backup_days = snapshot(target, backup)
+            self.assertEqual((ver, backup_days), ("1", 1))
+            check_days, check_cols = upgrade(backup)
+            self.assertEqual((check_days, check_cols), (1, 10))
+            upgraded_backup = sqlite3.connect(backup)
+            self.assertEqual(upgraded_backup.execute(
+                "SELECT v FROM meta WHERE k='schema_version'").fetchone()[0], "2")
+            self.assertEqual(upgraded_backup.execute(
+                "SELECT ais_position_messages FROM day_stats").fetchone()[0], 9)
+            upgraded_backup.close()
             # Rehearse v1 -> v2 on an isolated backup, not the original file.
             days, stable_columns = verify_live_db_backup(target)
             self.assertEqual((days, stable_columns), (1, 10))
