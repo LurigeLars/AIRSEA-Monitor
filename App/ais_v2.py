@@ -108,7 +108,8 @@ def process_observation(conn: sqlite3.Connection, parsed: dict, salt: bytes,
     if now.tzinfo is None:
         raise ValueError("AIS observations require timezone-aware timestamps")
     now = now.astimezone(timezone.utc)
-    stamp = now.isoformat(timespec="seconds")
+    # Preserve microseconds: distinct static/position messages can share one second.
+    stamp = now.isoformat(timespec="microseconds")
     day = now.date().isoformat()
     vessel = hashlib.sha256(salt + parsed["mmsi"].encode("ascii")).hexdigest()[:32]
     coords = parsed["coords"]
