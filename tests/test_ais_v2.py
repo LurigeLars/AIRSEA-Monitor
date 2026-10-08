@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "App"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from validate_migration import verify_live_db_backup  # noqa: E402
 from pilot_core import EAST_LIMIT, WEST_LIMIT, open_db, process_ais, prune_temp, summary  # noqa: E402
 
 UTC = timezone.utc
@@ -185,6 +187,13 @@ class LegacyV1MigrationTests(unittest.TestCase):
             """)
             old.commit()
             old.close()
+            # Rehearse v1 -> v2 on an isolated backup, not the original file.
+            days, stable_columns = verify_live_db_backup(target)
+            self.assertEqual((days, stable_columns), (1, 10))
+            still_old = sqlite3.connect(target)
+            self.assertEqual(still_old.execute(
+                "SELECT v FROM meta WHERE k='schema_version'").fetchone()[0], "1")
+            still_old.close()
             conn = open_db(target)
             try:
                 row = summary(conn)[0]
