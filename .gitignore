@@ -62,3 +62,9 @@ Thumbs.db
 *.ps1.bak
 *.tmp
 *.bak
+
+# Encrypted Windows credential exports and local cryptographic state
+*.dpapi
+*.bin
+*.sqlite-wal
+*.sqlite-shm
