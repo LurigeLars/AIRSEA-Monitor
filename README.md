@@ -21,12 +21,12 @@ AIRSEA Monitor is a source-code snapshot of a locally operated, time-limited sha
 | `App/opensky_oauth.py` | Optional in-memory OpenSky OAuth token handling |
 | `App/report.py` | Aggregated status and data-quality reporting |
 | `App/run.ps1` | Windows runner expecting credentials pre-provisioned outside the repository |
-| `App/status.ps1`, `App/stop.ps1`, `App/uninstall.ps1` | Local task inspection and lifecycle utilities |
+| `App/import-opensky.ps1` | Import locally supplied OpenSky OAuth JSON into the current Windows user's DPAPI store; requires `-Source` |\n| `App/status.ps1`, `App/stop.ps1`, `App/uninstall.ps1` | Local task inspection and lifecycle utilities |
 | `App/pilot-processes.ps1` | Process ownership and orphan checks |
 | `tests/test_pilot_core.py` | Synthetic regression scenarios for crossing accounting |
 | `scripts/check_publication.py` | Basic tracked-file policy guard; human review remains mandatory |
 
-**Not included:** local databases, runtime logs, keys, credential stores, observation traces, machine-specific task registration and the local credential-import helper. The credential importer is intentionally withheld from the public source snapshot. This repository is not currently a one-command installer.
+**Not included:** local databases, runtime logs, keys, credential stores, observation traces and machine-specific task registration. The import helper is published without any credentials. It accepts an explicit local JSON file path and stores its contents using Windows DPAPI; it does not upload those credentials. This repository is not currently a one-command installer.
 
 ## Crossing definition and limitations
 
