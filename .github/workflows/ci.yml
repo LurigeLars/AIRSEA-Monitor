@@ -33,6 +33,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Parse all PowerShell source and deployment scripts
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem App,scripts,tests -Include '*.ps1' -Recurse -File
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName, [ref]$tokens, [ref]$errors
+            )
+            if ($errors.Count) { throw "PowerShell parse failure" }
+          }
+          Write-Host "PowerShell syntax PASS"
       - name: Verify OpenSky credential importer without live secrets
         shell: pwsh
         run: ./tests/test_import_opensky.ps1
