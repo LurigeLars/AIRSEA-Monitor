@@ -27,3 +27,12 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Publication guard
         run: python scripts/check_publication.py
+
+  opensky-import-smoke:
+    name: Windows DPAPI import (synthetic)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify OpenSky credential importer without live secrets
+        shell: pwsh
+        run: ./tests/test_import_opensky.ps1
