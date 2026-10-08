@@ -1,37 +1,60 @@
 # AIRSEA Monitor
 
-Experimental monitoring of maritime AIS reports and aircraft observations for situational awareness and data-quality research.
+**Research-only AIS and aviation observation pilot.** Collects aggregated maritime and aircraft observations to investigate data coverage and coarse changes in traffic. It is not a real-time navigation, defence or trading product.
 
-## Purpose
+AIRSEA Monitor is a source-code snapshot of a locally operated, time-limited shadow pilot. It does **not** send trading signals, place orders or issue automatic alerts. It does not establish cargo volume, military intent or the absence of ship movements.
 
-AIRSEA Monitor explores how to collect, normalize and assess maritime and aviation observations without confusing source availability with verified traffic or movements. The prototype combines AIS position reports with aircraft observations from separate providers.
+## What it does
 
-The monitoring pilot is **observational only**. It does not place trades, produce military-intent assessments, or infer confirmed cargo volumes from position data.
+- **Maritime AIS:** subscribes to AISStream for a bounded sampling area, validates AIS positions and ship-type messages, and aggregates observation counts.
+- **Coarse vessel transitions:** assigns positions to west, intermediate and east zones and counts only qualifying transitions between opposite sides.
+- **Aircraft observations:** polls ADSB.lol and OpenSky separately, recording aggregate airborne counts without persisting raw aircraft identifiers or tracks.
+- **Data quality:** records source errors, disconnections and source-specific coverage. Ship types arriving after a crossing can improve the tanker-confirmed lower bound.
+- **Storage:** uses local SQLite with salted, short-lived per-vessel pseudonyms and daily aggregates. Per-vessel intermediate state is pruned after 15 days.
 
-## Current state
+## Repository layout
 
-This public repository is being prepared for a **source-code-only import** from an existing locally running prototype. The implementation is not yet published; no claim of a working installation is made until the reviewed source and tests are committed.
+| Location | Responsibility |
+| --- | --- |
+| `App/pilot_core.py` | Geographic zones, AIS parsing, crossing rules, SQLite schema and aggregation |
+| `App/collector.py` | AIS websocket acquisition, bounded polling and shadow-pilot lifecycle |
+| `App/opensky_oauth.py` | Optional in-memory OpenSky OAuth token handling |
+| `App/report.py` | Aggregated status and data-quality reporting |
+| `App/run.ps1` | Windows runner expecting credentials pre-provisioned outside the repository |
+| `App/status.ps1`, `App/stop.ps1`, `App/uninstall.ps1` | Local task inspection and lifecycle utilities |
+| `App/pilot-processes.ps1` | Process ownership and orphan checks |
+| `tests/test_pilot_core.py` | Synthetic regression scenarios for crossing accounting |
+| `scripts/check_publication.py` | Basic tracked-file policy guard; human review remains mandatory |
 
-## Data-quality principles
+**Not included:** local databases, runtime logs, keys, credential stores, observation traces, machine-specific task registration and the local credential-import helper. The credential importer is intentionally withheld from the public source snapshot. This repository is not currently a one-command installer.
 
-- An active AIS connection is **not** evidence of complete geographic coverage.
-- Position reports do not guarantee that both sides of a passage boundary are observed.
-- A vessel crossing should be counted only when its consecutive, time-ordered observations support the configured transition rule.
-- Ship type may be absent or arrive through a separate static-data message.
-- Report all-vessel transitions separately from tanker-confirmed transitions.
-- An absence of confirmed crossings is **not** evidence that no vessels passed.
-- Flight snapshots from different providers must be labelled with their source and collection time.
+## Crossing definition and limitations
 
-## Repository and privacy
+In the current code, the AIS geographical sampling box covers a broad region. `zone_for()` classifies valid positions into W, M or E using longitude thresholds. The intermediate zone does not count as a crossing on its own.
 
-Only reviewed, reusable source code, documentation, synthetic examples and tests belong here. Keep credentials, personal information, absolute machine paths, local application settings, AIS/flight raw observations, databases and logs outside Git.
+`process_ais()` counts a direction only after the *same pseudonymous vessel* has observations on both opposite sides **4 minutes to 6 hours apart**, and the qualifying new report has speed over ground in **1–40 knots**. A crossing is deduplicated per vessel, date and direction. Tanker confirmation additionally depends on ship-type codes 80–89.
 
-See [SECURITY.md](SECURITY.md) before adding source files.
+**Interpretation warning:** Connected AIS uptime and the number of received position messages are not measures of population coverage. If only the west side is observed, zero registered transitions is consistent with insufficient observations; it is not proof of zero traffic. Sparse or delayed reports, ship-type coverage gaps, reception-timestamp assumptions, geographical filtering and UTC day boundaries can bias counts. The current logic does not independently verify physically plausible travel distance between reported positions. Treat transition and tanker totals as observation-dependent lower bounds, not official traffic statistics.
 
-## Development
+## Development and validation
 
-The next step is a security-reviewed source import, followed by reproducible tests for zone boundaries, stale observations, message-type handling, and one-crossing-per-vessel accounting. Dependencies, install steps and operating instructions will be documented from the actual checked-in code rather than invented in advance.
+The Python sources are compatible with Python 3.12+ syntax. The running Windows prototype uses PowerShell 7, `uv`, and the Python `websockets` dependency. The existing local runner expects AISStream credentials stored outside Git; OpenSky OAuth is optional and is also provisioned externally.
 
-## Licensing
+Run the source-only regression suite without network access or credentials:
 
-No license has been selected yet. Public visibility does not grant a reuse license. A license can be added after the code and its third-party dependencies have been reviewed.
+```shell
+python -m unittest discover -s tests -v
+python scripts/check_publication.py
+```
+
+CI compiles the Python sources and runs the synthetic tests on Python 3.12 and 3.13. The publication guard detects common accidental runtime-data files and host identifiers; it is **not** comprehensive credential scanning.
+
+Before production use, add a reproducible installer, explicit configuration validation, robust tests for midnight crossings and stale reports, geographical coverage validation, and physically plausible crossing constraints. Keep live pilot runtime unchanged until changes are tested and deliberately deployed.
+
+## Privacy and security
+
+See [SECURITY.md](SECURITY.md). **Do not commit** credentials, usernames, e-mail addresses, device-specific absolute paths, raw AIS/aircraft observations, SQLite databases or logs. A public source repository must contain no private runtime state.
+
+## License
+
+No reuse license has been selected. Public visibility does not itself grant permission to reuse the code.
