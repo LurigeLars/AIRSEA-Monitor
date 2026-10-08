@@ -67,24 +67,24 @@ class CrossingTests(unittest.TestCase):
     def test_west_to_east_once(self):
         self.send(position(WEST_LIMIT - .1))
         self.send(static(80), 1)
-        self.send(position(EAST_LIMIT + .1), 20)
+        self.send(position(EAST_LIMIT + .1), 120)
         self.assertEqual(self.counts(), (1, 1))
-        self.send(position(EAST_LIMIT + .2), 22)
+        self.send(position(EAST_LIMIT + .2), 122)
         self.assertEqual(self.counts(), (1, 1))
 
     def test_middle_zone_preserves_last_side(self):
         self.send(position(WEST_LIMIT - .1))
         self.send(position((WEST_LIMIT + EAST_LIMIT)/2), 10)
-        self.send(position(EAST_LIMIT + .1), 15)
+        self.send(position(EAST_LIMIT + .1), 130)
         self.assertEqual(self.counts(), (1, 0))
 
     def test_late_static_classification(self):
         self.send(position(WEST_LIMIT - .1))
-        self.send(position(EAST_LIMIT + .1), 20)
+        self.send(position(EAST_LIMIT + .1), 120)
         self.assertEqual(self.counts(), (1, 0))
-        self.send(static(83), 21)
+        self.send(static(83), 121)
         self.assertEqual(self.counts(), (1, 1))
-        self.send(static(83), 22)
+        self.send(static(83), 122)
         self.assertEqual(self.counts(), (1, 1))
 
     def test_invalid_time_and_speed_do_not_count(self):
