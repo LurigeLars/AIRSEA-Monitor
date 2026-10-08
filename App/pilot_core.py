@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # Broad chokepoint sampling region. Not a navigation or operational predictor.
 AIS_BOX = [[[27.25, 55.05], [25.15, 58.15]]]
 # Coarse two-zone observation; no vessel paths are stored.
@@ -169,7 +169,8 @@ def open_db(path: Path) -> sqlite3.Connection:
         utc TEXT NOT NULL, provider TEXT NOT NULL, kind TEXT NOT NULL
       );
     """)
-    conn.execute("INSERT OR IGNORE INTO meta(k,v) VALUES('schema_version',?)", (str(SCHEMA_VERSION),))
+    from ais_v2 import migrate
+    migrate(conn, utcnow())
     conn.execute("INSERT OR IGNORE INTO meta(k,v) VALUES('pilot_start_utc',?)", (iso_now(),))
     conn.commit()
     return conn
@@ -190,64 +191,20 @@ def log_error(conn: sqlite3.Connection, source: str, exc: Exception):
     conn.commit()
 
 
-def process_ais(conn: sqlite3.Connection, raw: dict[str, Any], salt: bytes, now: datetime | None = None) -> bool:
+def process_ais(conn: sqlite3.Connection, raw: dict[str, Any], salt: bytes,
+                now: datetime | None = None) -> bool:
+    """Count only validated, privacy-preserving zone transitions."""
     parsed = extract_ais(raw)
     if parsed is None:
         return False
-    now = now or utcnow()
-    today, nowstr = day_key(now), now.isoformat(timespec="seconds")
-    pseudonym = fingerprint(parsed["mmsi"], salt)
     coords = parsed["coords"]
-    if coords is not None:
-        lat, lon, sog = coords
-        zone = zone_for(lat, lon)
-        if zone is None:
-            return False
-        inc(conn, "ais_position_messages", day=today)
-    else:
-        inc(conn, "ais_static_messages", day=today)
-        zone, sog = None, None
-    row = conn.execute("SELECT ship_type,last_zone,zone_since,last_seen FROM vessel_day WHERE day=? AND vessel_hash=?", (today, pseudonym)).fetchone()
-    prior_type, prev_zone, zone_since, last_seen = row if row else (None, None, None, None)
-    kind = parsed["ship_type"] if parsed["ship_type"] is not None else prior_type
-    if coords is None:
-        if tanker_code(kind) and not tanker_code(prior_type):
-            # Static type can arrive AFTER a coarse crossing; repair lower-bound classification.
-            existing = conn.execute("SELECT COUNT(*) FROM counted_crossing WHERE day=? AND vessel_hash=?", (today,pseudonym)).fetchone()[0]
-            if existing:
-                inc(conn, "ais_crossings_tanker", value=existing, day=today)
-        if row is None:
-            conn.execute("INSERT INTO vessel_day(day,vessel_hash,ship_type) VALUES(?,?,?)", (today,pseudonym,kind))
-        elif parsed["ship_type"] is not None:
-            conn.execute("UPDATE vessel_day SET ship_type=? WHERE day=? AND vessel_hash=?", (kind,today,pseudonym))
-        return True
-    # Report crossing only when moving between coarse disjoint sides, 4min..6h apart.
-    crossed = False
-    if (prev_zone in {"W", "E"} and zone in {"W", "E"} and prev_zone != zone
-            and zone_since and 1 <= sog <= 40):
-        previous = parse_dt(zone_since)
-        delta = (now-previous).total_seconds() if previous else 0
-        crossed = 240 <= delta <= 21600
-    if crossed:
-        direction = prev_zone + zone
-        already = conn.execute("SELECT 1 FROM counted_crossing WHERE day=? AND vessel_hash=? AND direction=?", (today,pseudonym,direction)).fetchone()
-        if not already:
-            conn.execute("INSERT INTO counted_crossing VALUES(?,?,?)", (today,pseudonym,direction))
-            inc(conn,"ais_crossings_all",day=today)
-            if tanker_code(kind):
-                inc(conn,"ais_crossings_tanker",day=today)
-    if zone not in {"W", "E"}:
-        new_zone, new_zone_since = prev_zone, zone_since
-    elif zone != prev_zone:
-        new_zone, new_zone_since = zone, nowstr
-    else:
-        new_zone, new_zone_since = prev_zone, zone_since
-    conn.execute("""INSERT INTO vessel_day(day,vessel_hash,ship_type,last_zone,zone_since,last_seen)
-      VALUES(?,?,?,?,?,?) ON CONFLICT(day,vessel_hash) DO UPDATE SET
-      ship_type=excluded.ship_type,last_zone=excluded.last_zone,zone_since=excluded.zone_since,last_seen=excluded.last_seen""",
-      (today,pseudonym,kind,new_zone,new_zone_since,nowstr))
-    return True
-
+    zone = zone_for(coords[0], coords[1]) if coords is not None else None
+    if coords is not None and zone is None:
+        return False
+    # Conservative minimum separation in nautical miles; no coordinates persisted.
+    minimum_nm = (EAST_LIMIT - WEST_LIMIT) * 60 * math.cos(math.radians(AIS_LAT_MAX))
+    from ais_v2 import process_observation
+    return process_observation(conn, parsed, salt, now or utcnow(), zone, minimum_nm)
 
 def prune_temp(conn: sqlite3.Connection, current: datetime | None = None):
     """Discard hashed per-vessel state after 15 days, retaining aggregate day stats."""
@@ -255,6 +212,8 @@ def prune_temp(conn: sqlite3.Connection, current: datetime | None = None):
     cutoff = (current-timedelta(days=15)).strftime("%Y-%m-%d")
     conn.execute("DELETE FROM vessel_day WHERE day < ?",(cutoff,))
     conn.execute("DELETE FROM counted_crossing WHERE day < ?",(cutoff,))
+    from ais_v2 import prune
+    prune(conn, current)
     conn.commit()
 
 
@@ -285,7 +244,9 @@ def summary(conn: sqlite3.Connection) -> list[dict[str, Any]]:
       (SELECT COUNT(*) FROM vessel_day v WHERE v.day=s.day AND v.ship_type IS NOT NULL) AS typed,
       (SELECT COUNT(*) FROM vessel_day v WHERE v.day=s.day AND v.ship_type BETWEEN 80 AND 89) AS tankers,
       (SELECT ROUND(AVG(f.observed_airborne),1) FROM flight_snapshot f WHERE substr(f.utc,1,10)=s.day AND f.provider='adsb') AS adsb_mean,
-      (SELECT ROUND(AVG(f.observed_airborne),1) FROM flight_snapshot f WHERE substr(f.utc,1,10)=s.day AND f.provider='opensky') AS opensky_mean
+      (SELECT ROUND(AVG(f.observed_airborne),1) FROM flight_snapshot f WHERE substr(f.utc,1,10)=s.day AND f.provider='opensky') AS opensky_mean,
+      s.ais_zone_w,s.ais_zone_m,s.ais_zone_e,
+      s.ais_vessels_w,s.ais_vessels_m,s.ais_vessels_e
       FROM day_stats s ORDER BY s.day""").fetchall()
-    names=("day","ais_positions","ais_static","crossings_all","crossings_tanker_typed","connected_seconds","disconnects","adsb_snapshots","adsb_errors","opensky_snapshots","opensky_errors","distinct_vessels_in_retention","typed_vessels_in_retention","tanker_vessels_in_retention","adsb_mean_airborne","opensky_mean_airborne")
+    names=("day","ais_positions","ais_static","crossings_all","crossings_tanker_typed","connected_seconds","disconnects","adsb_snapshots","adsb_errors","opensky_snapshots","opensky_errors","distinct_vessels_in_retention","typed_vessels_in_retention","tanker_vessels_in_retention","adsb_mean_airborne","opensky_mean_airborne","zone_w_positions","zone_m_positions","zone_e_positions","zone_w_vessels","zone_m_vessels","zone_e_vessels")
     return [dict(zip(names,row)) for row in rows]
