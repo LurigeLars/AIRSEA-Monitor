@@ -113,6 +113,17 @@ class V2ScenarioTests(unittest.TestCase):
         self.send(ship_type(), when=previous + timedelta(hours=3, minutes=2))
         self.assertEqual(self.rows()["2026-10-09"]["crossings_tanker_typed"], 1)
 
+    def test_subsecond_order_protects_static_ship_type_and_side(self):
+        t0 = BASE + timedelta(microseconds=100)
+        self.assertTrue(self.send(ais(WEST), when=t0))
+        self.assertTrue(self.send(ship_type(), when=t0 + timedelta(microseconds=400)))
+        # Delayed position must not override the more recent static message.
+        self.assertFalse(self.send(ais(EAST), when=t0 + timedelta(microseconds=200)))
+        self.send(ais(EAST), when=t0 + timedelta(hours=2))
+        row = self.rows()[BASE.date().isoformat()]
+        self.assertEqual(row["ais_positions"], 2)
+        self.assertEqual(row["crossings_tanker_typed"], 1)
+
     def test_duplicate_and_time_reversal_do_not_change_counters(self):
         self.assertTrue(self.send(ais(WEST), 0))
         self.assertFalse(self.send(ais(EAST), 0))
