@@ -42,9 +42,12 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--db", type=Path, required=True)
     args.add_argument("--dest", type=Path, required=True)
+    args.add_argument("--expect-version", choices=["1", "2"], default=None)
     opt = args.parse_args()
     try:
         version, days = snapshot(opt.db, opt.dest)
+        if opt.expect_version is not None and version != opt.expect_version:
+            raise ValueError("unexpected source schema version")
     except (OSError, sqlite3.Error, ValueError):
         print("FAIL: SQLite backup could not be verified.", file=sys.stderr)
         raise SystemExit(1) from None
