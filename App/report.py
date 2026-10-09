@@ -49,7 +49,7 @@ if __name__ == "__main__":
         possible = max(1, (obs_end-obs_begin).total_seconds())
         coverage = min(100.0, 100.0 * row['connected_seconds'] / possible)
         print(f"{row['day']}: AIS stream connected {coverage:.1f}% of day; "
-              f"received {row['ais_positions']} positional messages; "
+              f"accepted {row['ais_positions']} positional messages (legacy total); "
               f"zone W/M/E positions {row['zone_w_positions']}/{row['zone_m_positions']}/{row['zone_e_positions']}; "
               f"zone W/M/E unique vessels {row['zone_w_vessels']}/{row['zone_m_vessels']}/{row['zone_e_vessels']}; "
               f"coarse all-vessel transitions {row['crossings_all']}; "
