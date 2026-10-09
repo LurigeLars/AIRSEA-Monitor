@@ -58,6 +58,9 @@ def ensure_schema(conn: sqlite3.Connection, now: datetime | None = None) -> None
 def increment(conn: sqlite3.Connection, day: str, field: str) -> None:
     if field not in COLUMNS:
         raise ValueError("unsupported AIS intake diagnostic")
+    # Ensure read-only reports can list a day with rejected frames but no
+    # accepted AIS positions or connected-time accrual yet.
+    conn.execute("INSERT OR IGNORE INTO day_stats(day) VALUES(?)", (day,))
     conn.execute("INSERT OR IGNORE INTO ais_intake_day(day) VALUES(?)", (day,))
     conn.execute(
         f"UPDATE ais_intake_day SET {field}={field}+1 WHERE day=?",
