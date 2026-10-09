@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from opensky_oauth import OpenSkyOAuth
+from ais_diagnostics import ingest_frame
 
 from pilot_core import (
     AIS_BOX, FLIGHT_CENTER, FLIGHT_RADIUS_NM, OPENSKY_BOUNDS,
@@ -71,6 +72,7 @@ async def ais_stream(conn: sqlite3.Connection, salt: bytes, stop: asyncio.Event)
     while not stop.is_set():
         opened = None
         message_count = 0
+        frame_count = 0
         try:
             async with connect(AIS_URL, open_timeout=15, compression="deflate", max_size=2_000_000, ping_interval=30, ping_timeout=30) as ws:
                 subscription = {
@@ -102,12 +104,14 @@ async def ais_stream(conn: sqlite3.Connection, salt: bytes, stop: asyncio.Event)
                         inc(conn, "ais_connected_seconds", max(0, now_mono-accrued_until))
                         accrued_until = now_mono
                         conn.commit()
-                    payload = json.loads(msg)
-                    if not isinstance(payload, dict):
-                        continue
-                    if process_ais(conn, payload, salt):
+                    # Count every post-subscription frame, including rejected
+                    # JSON, invalid AIS data and duplicates. No raw payloads
+                    # or vessel identifiers are persisted or logged.
+                    category = ingest_frame(conn, msg, salt)
+                    frame_count += 1
+                    if category.startswith("accepted_"):
                         message_count += 1
-                    if message_count % 500 == 0 and message_count:
+                    if frame_count % 50 == 0:
                         conn.commit()
                         prune_temp(conn)
         except asyncio.CancelledError:
