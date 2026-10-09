@@ -70,7 +70,7 @@ def rejected_reason(obj: Any) -> str:
     if not isinstance(obj, dict):
         return "rejected_non_object"
     kind = obj.get("MessageType")
-    if kind not in SUPPORTED_TYPES:
+    if not isinstance(kind, str) or kind not in SUPPORTED_TYPES:
         return "rejected_unsupported"
     message = obj.get("Message")
     if not isinstance(message, dict):
@@ -126,6 +126,13 @@ def ingest_frame(conn: sqlite3.Connection, frame: str | bytes, salt: bytes,
     if not isinstance(payload, dict):
         increment(conn, day, "rejected_non_object")
         return "rejected_non_object"
+
+    # Discard known invalid data before invoking the state machine. This also
+    # protects it from provider JSON structures it does not support.
+    preliminary = rejected_reason(payload)
+    if preliminary != "rejected_duplicate_stale":
+        increment(conn, day, preliminary)
+        return preliminary
 
     # Protect existing aggregate, per-vessel and crossing tables against
     # partial writes on an unexpected processing failure.
