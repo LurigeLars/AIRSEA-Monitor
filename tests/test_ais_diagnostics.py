@@ -126,7 +126,7 @@ class IntakeTests(unittest.TestCase):
                 self.send(position())
         self.assertEqual(self.info()["processing_errors"], 1)
         self.assertEqual(self.info()["accepted_positions"], 0)
-        self.assertEqual(summary(self.conn), [])
+        self.assertEqual(summary(self.conn)[0]["ais_positions"], 0)
         self.check_balanced()
 
     def test_counter_whitelist_prevents_freeform_fields(self):
