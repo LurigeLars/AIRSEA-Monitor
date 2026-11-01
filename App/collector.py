@@ -30,7 +30,7 @@ from pilot_core import (
 try:
     from websockets.asyncio.client import connect
 except ImportError:
-    print("Dependency missing: websockets. Run via uv --with websockets.", file=sys.stderr)
+    print("Dependency missing: websockets. Run via uv --with-requirements requirements.txt.", file=sys.stderr)
     raise SystemExit(2)
 
 AIS_URL = "wss://stream.aisstream.io/v0/stream"

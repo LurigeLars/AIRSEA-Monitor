@@ -38,7 +38,7 @@ In the current code, the AIS geographical sampling box covers a broad region. `z
 
 ## Development and validation
 
-The Python sources are compatible with Python 3.12+ syntax. The running Windows prototype uses PowerShell 7, `uv`, and the Python `websockets` dependency. The existing local runner expects AISStream credentials stored outside Git; OpenSky OAuth is optional and is also provisioned externally.
+The Python sources are compatible with Python 3.12+ syntax. The Windows runner uses PowerShell 7 and `uv`; `App/requirements.txt` pins the Python `websockets` dependency. The runner resolves this file relative to its own deployed `App` directory with `uv run --with-requirements`, so updates proposed by Dependabot affect the actual runtime when deliberately deployed. For an existing installation, deploy the entire reviewed `App` directory (including `run.ps1` and `requirements.txt`) as one change; do not update dependencies or restart a running pilot automatically. The local scheduled task is managed separately and may intentionally be disabled. The existing local runner expects AISStream credentials stored outside Git; OpenSky OAuth is optional and is also provisioned externally.
 
 Run the source-only regression suite without network access or credentials:
 

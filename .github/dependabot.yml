@@ -1,7 +1,22 @@
 version: 2
 updates:
-  # The AIS collector currently installs websockets dynamically with uv --with.
-  # Do not add an unconsumed pip manifest: Dependabot would not update runtime.
+  # App/requirements.txt is consumed directly by App/run.ps1.
+  - package-ecosystem: "pip"
+    directory: "/App"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:25"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 2
+    groups:
+      runtime-minor-patch:
+        applies-to: "version-updates"
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
