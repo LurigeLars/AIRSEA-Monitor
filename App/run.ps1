@@ -56,10 +56,15 @@ try {
         Remove-Variable osSecure, osCredential, osJson -ErrorAction SilentlyContinue
     }
 
+    $step = 'requirements_manifest'
+    $requirementsPath = Join-Path $PSScriptRoot 'requirements.txt'
+    if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
+        throw [System.IO.FileNotFoundException]::new('Pinned runtime requirements unavailable')
+    }
     $step = 'python_collector'
     Set-Location -LiteralPath $PSScriptRoot
     Write-Sanitized 'runner starting collector (no secrets logged)'
-    & $uvExe run --python 3.12 --with websockets python .\collector.py --db (Join-Path $dataDir 'pilot.sqlite') --days 14 *>> $collectorLog
+    & $uvExe run --python 3.12 --with-requirements $requirementsPath python .\collector.py --db (Join-Path $dataDir 'pilot.sqlite') --days 14 *>> $collectorLog
     $result = $LASTEXITCODE
     if ($result -ne 0) { throw [System.InvalidOperationException]::new('Collector exited nonzero') }
     Write-Sanitized 'runner collector finished normally'
