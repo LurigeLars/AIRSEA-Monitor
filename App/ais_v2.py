@@ -6,7 +6,6 @@ the minimum distance between the two disjoint longitude zones.
 from __future__ import annotations
 
 import hashlib
-import math
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
