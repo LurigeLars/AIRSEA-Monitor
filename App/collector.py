@@ -198,7 +198,7 @@ async def run(db: Path, days: int):
         try:
             await asyncio.wait_for(stop.wait(), timeout=remaining)
         except asyncio.TimeoutError:
-            pass
+            stop.set()  # Deadline elapsed; the finally block still stops workers.
     finally:
         stop.set()
         for task in workers:
