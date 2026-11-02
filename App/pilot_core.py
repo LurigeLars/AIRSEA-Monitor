@@ -171,7 +171,7 @@ def open_db(path: Path) -> sqlite3.Connection:
     """)
     from ais_v2 import migrate
     migrate(conn, utcnow())
-    from ais_diagnostics import ensure_schema
+    from ais_intake_schema import ensure_schema
     ensure_schema(conn)
     conn.execute("INSERT OR IGNORE INTO meta(k,v) VALUES('pilot_start_utc',?)", (iso_now(),))
     conn.commit()
