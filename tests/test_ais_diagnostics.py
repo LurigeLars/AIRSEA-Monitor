@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 import tempfile
 import unittest
@@ -11,9 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "App"))
-from ais_diagnostics import (COLUMNS, REJECTION_COLUMNS, daily_report,
+from ais_diagnostics import (REJECTION_COLUMNS, daily_report,
                              ingest_frame, increment)
-from pilot_core import (EAST_LIMIT, WEST_LIMIT, open_db, summary)
+from pilot_core import (WEST_LIMIT, open_db, summary)
 
 BASE = datetime(2026, 10, 9, 3, 0, tzinfo=timezone.utc)
 SALT = b"synthetic-test-not-live"
