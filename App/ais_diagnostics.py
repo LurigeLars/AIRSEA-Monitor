@@ -15,7 +15,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from ais_intake_schema import COLUMNS, ensure_schema
+from ais_intake_schema import COLUMNS
 REJECTION_COLUMNS = tuple(x for x in COLUMNS if x.startswith("rejected_"))
 POSITION_TYPES = frozenset({
     "PositionReport", "StandardClassBPositionReport",
