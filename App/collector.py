@@ -24,7 +24,7 @@ from ais_diagnostics import ingest_frame
 from pilot_core import (
     AIS_BOX, FLIGHT_CENTER, FLIGHT_RADIUS_NM, OPENSKY_BOUNDS,
     adsb_count, inc, iso_now, log_error, open_db, opensky_count,
-    process_ais, prune_temp, record_flight_count, started_at, utcnow,
+    prune_temp, record_flight_count, started_at, utcnow,
 )
 
 try:
@@ -138,7 +138,7 @@ async def flight_poll(conn: sqlite3.Connection, stop: asyncio.Event, provider: s
             await asyncio.wait_for(stop.wait(), timeout=90)
             return
         except asyncio.TimeoutError:
-            pass
+            stop.set()  # Expected deadline expiry; cleanup runs in finally.
     while not stop.is_set():
         began = time.monotonic()
         try:

@@ -15,20 +15,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-COLUMNS = (
-    "frames_received",
-    "accepted_positions",
-    "accepted_static",
-    "rejected_bad_json",
-    "rejected_non_object",
-    "rejected_unsupported",
-    "rejected_structure",
-    "rejected_identifier",
-    "rejected_position",
-    "rejected_outside_box",
-    "rejected_duplicate_stale",
-    "processing_errors",
-)
+from ais_intake_schema import COLUMNS, ensure_schema
 REJECTION_COLUMNS = tuple(x for x in COLUMNS if x.startswith("rejected_"))
 POSITION_TYPES = frozenset({
     "PositionReport", "StandardClassBPositionReport",
@@ -36,23 +23,6 @@ POSITION_TYPES = frozenset({
 })
 STATIC_TYPES = frozenset({"ShipStaticData", "StaticDataReport"})
 SUPPORTED_TYPES = POSITION_TYPES | STATIC_TYPES
-
-
-def ensure_schema(conn: sqlite3.Connection, now: datetime | None = None) -> None:
-    """Idempotent, no backfill and no changes to existing AIS counters."""
-    now = now or datetime.now(timezone.utc)
-    cols = ",\n".join(f"{name} INTEGER NOT NULL DEFAULT 0 CHECK({name}>=0)" for name in COLUMNS)
-    conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS ais_intake_day (
-            day TEXT PRIMARY KEY,
-            {cols}
-        )
-    """)
-    conn.execute(
-        "INSERT OR IGNORE INTO meta(k,v) VALUES('ais_intake_tracking_since',?)",
-        (now.astimezone(timezone.utc).isoformat(timespec="seconds"),),
-    )
-    conn.commit()
 
 
 def increment(conn: sqlite3.Connection, day: str, field: str) -> None:
