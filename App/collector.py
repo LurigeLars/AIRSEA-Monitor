@@ -138,7 +138,7 @@ async def flight_poll(conn: sqlite3.Connection, stop: asyncio.Event, provider: s
             await asyncio.wait_for(stop.wait(), timeout=90)
             return
         except asyncio.TimeoutError:
-            stop.set()  # Expected deadline expiry; cleanup runs in finally.
+            pass  # Stagger elapsed; start polling. Never set the shared stop event here.
     while not stop.is_set():
         began = time.monotonic()
         try:
@@ -198,7 +198,7 @@ async def run(db: Path, days: int):
         try:
             await asyncio.wait_for(stop.wait(), timeout=remaining)
         except asyncio.TimeoutError:
-            stop.set()  # Deadline elapsed; the finally block still stops workers.
+            pass  # Deadline elapsed; the finally block stops the workers.
     finally:
         stop.set()
         for task in workers:

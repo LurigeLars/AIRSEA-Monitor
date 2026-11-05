@@ -107,13 +107,16 @@ try {
         '--db', $Db, '--dest', $PreStopDb, '--expect-version', '2'
     )
     Copy-Item -LiteralPath $LiveApp -Destination $StagedApp -Recurse -Force -ErrorAction Stop
-    foreach ($name in @('ais_diagnostics.py', 'collector.py', 'pilot_core.py', 'report.py')) {
-        Copy-Item -LiteralPath (Join-Path (Join-Path $Repo 'App') $name) -Destination $StagedApp -Force
-    }
+    # Deploy every reviewed Python module so new modules (e.g. ais_intake_schema.py) are never left behind.
+    Get-ChildItem -LiteralPath (Join-Path $Repo 'App') -Filter '*.py' -File |
+        Copy-Item -Destination $StagedApp -Force -ErrorAction Stop
     Invoke-PythonChecked -Arguments @('-m', 'py_compile',
         (Join-Path $StagedApp 'ais_v2.py'),
         (Join-Path $StagedApp 'pilot_core.py'),
         (Join-Path $StagedApp 'report.py'))
+    # py_compile does not follow imports; fail before downtime if a staged module is missing.
+    Invoke-PythonChecked -Arguments @('-c',
+        "import sys; sys.path.insert(0, r'$StagedApp'); import ais_intake_schema, ais_v2, ais_diagnostics, pilot_core, report")
 
     # Enter the downtime window. Disabled means no automatic task retrigger.
     $ChangeStarted = $true

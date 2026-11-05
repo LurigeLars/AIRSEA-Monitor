@@ -50,5 +50,42 @@ class RuntimeManifestTests(unittest.TestCase):
         asyncio.run(exercise())
 
 
+class CollectorLifecycleTests(unittest.TestCase):
+    def test_opensky_stagger_does_not_stop_the_pilot(self):
+        """Regression: the 90 s OpenSky stagger once set the shared stop event."""
+        try:
+            import websockets  # noqa: F401  collector exits without it
+        except ImportError:
+            self.skipTest("websockets not installed; dedicated uv CI lane covers this")
+        import sqlite3
+        import sys
+        from unittest import mock
+
+        sys.path.insert(0, str(ROOT / "App"))
+        import collector
+
+        real_wait_for = asyncio.wait_for
+
+        async def short_wait_for(awaitable, timeout=None):
+            return await real_wait_for(awaitable, timeout=0.01 if timeout and timeout >= 60 else timeout)
+
+        async def exercise():
+            stop = asyncio.Event()
+            with mock.patch.object(collector.asyncio, "wait_for", short_wait_for), \
+                    mock.patch.object(collector, "fetch_json", lambda url, **kw: {"states": []}), \
+                    mock.patch.object(collector, "record_flight_count"), \
+                    mock.patch.object(collector, "log_error"):
+                task = asyncio.create_task(
+                    collector.flight_poll(sqlite3.connect(":memory:"), stop, "opensky", interval=1800)
+                )
+                await asyncio.sleep(0.2)
+                stopped = stop.is_set()
+                stop.set()
+                await task
+            return stopped
+
+        self.assertFalse(asyncio.run(exercise()), "OpenSky stagger must not set the shared stop event")
+
+
 if __name__ == "__main__":
     unittest.main()
